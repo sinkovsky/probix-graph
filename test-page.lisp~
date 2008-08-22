@@ -1,0 +1,27 @@
+(defpackage :test-page
+  (:use :cl :cl-who :hunchentoot))
+
+(in-package :test-page)
+
+(defun foo ()
+  (standard-page
+   (:title "Not much there")
+   (:body "helloworld")))
+
+(defmacro standard-page ((&key title) &body body)
+   `(with-html-output-to-string (*standard-output* nil :prologue t :indent t)
+         (:html :xmlns "http://www.w3.org/1999/xhtml"
+                  :xml\:lang "en"
+                    :lang "en"
+                      (:head
+                       (:meta :http-equiv "Content-Type"
+                              :content    "text/html;charset=utf-8")
+                       (:title ,title)
+                       
+                       (:body
+                        (:div :id "header" ; Retro games header
+                              (:span :class "strapline"
+                                     "Vote on your favourite Retro Game"))
+                        ,@body)))))
+   
+   
