@@ -8,6 +8,9 @@
 
 (in-package :graph-server)
 
+(defvar *offset-x* 10)
+(defvar *offset-y* 10)
+
 (defun json-form-handler ()
     (with-html-output-to-string
       (*standard-output* nil :prologue t :indent nil)
@@ -19,54 +22,77 @@
       (:form :method "post" :action "/image"
              (:textarea :name "json" :cols 60 :rows 15 (format t "~A" (post-parameter "json")))
              (:br)
-             (:input :type :submit))
-      (:p
-       (format t "POST: ~A" (post-parameters)))
-      (:p
-       (let ((decoded-json nil))
-         (ignore-errors
-           (setf decoded-json (decode-json-from-string
-                               (post-parameter "json"))))
-         (format t "DECODED JSON: ~A"
-                 (if (not decoded-json)
-                     "Error in decoding JSON"
-                     decoded-json))))))))
+             (:select :name "output-format"
+                      (:option :value "png" "PNG") (:option :value "debug" "DEBUG"))
+             (:br)
+             (:input :type :submit))))))
+
+
+(define-condition json-parse-error (error)
+  ((message :initarg :message)))
+
+(defun parse-json (json)
+  (handler-case
+      (progn
+        (json-bind (size data) json
+          (json-bind (x y) size
+            (if (not (and x y data (listp data)))
+                (error 'json-parse-error :message
+                       (format nil "Size: ~A, x: ~A, y: ~A, data: ~A" size x y data))
+                (list :data data :size-x x :size-y y)))))
+    (error () nil)))
 
 (defun json-post-handler ()
-  (cond ((string= (post-parameter "output-format") "png")
-         ())
-        ((string= (post-parameter "output-format") "html") ())))
+  (let (decoded-json)
+    (handler-case
+        (progn 
+          (setf decoded-json (parse-json (post-parameter "json")))
+          (cond ((string= (post-parameter "output-format") "png")
+                 (image-output-png decoded-json))
+                ((string= (post-parameter "output-format") "debug")
+                 (image-output-debug decoded-json))))
+      (json-parse-error (perror)
+        (output-error-json perror)))))
 
-(defvar *offset-x* 10)
-(defvar *offset-y* 10)
+(defun output-error-json (error)
+    (setf (content-type) "text/plain")
+    (with-html-output-to-string
+        (*standard-output* nil :prologue nil :indent nil)
+      (format t "Error: ~A ~A" error (message error))))
 
-(defun build-graph ()
+(defun image-output-png (json)
   (setf (content-type) "image/png")
-  (with-canvas (:width 500 :height 300)
-    (set-rgb-fill 0.95 0.95 0.95)
-    (rectangle 0 0 500 300)
-    (fill-path)
-    (set-line-cap :square)
-    (set-line-width 0.35)
-    (move-to 10 10)
-    (line-to 10 290)
-    (move-to 10 10)
-    (line-to 490 10)
-    (stroke)
-    (move-to *offset-x* *offset-y*)
-    (set-rgb-stroke 0.6 0.5 0.9)
-    (set-line-width 1)
-    (let ((data #(10 20 30 70 60 40 41 76 23 54 23 54 12 125 34 65 23 229 150 139 90 40 50 30 50 20 30 180 150 90 30 45 90 110 130 20 150 160 130 140 40 30 20 10))
-          (offset 10))
-      (loop for i across data do
+  (let ((data (getf json :data))
+        (size-x (getf json :size-x))
+        (size-y (getf json :size-y))
+        (offset 10))
+    (with-canvas (:width size-x :height size-y)
+      (set-rgb-fill 0.95 0.95 0.95)
+      (rectangle 0 0 size-x size-y)
+      (fill-path)
+      (set-line-cap :square)
+      (set-line-width 0.35)
+      (move-to 10 10)
+      (line-to 10 (- size-y 10))
+      (move-to 10 10)
+      (line-to (- size-x 10) 10)
+      (stroke)
+      (move-to *offset-x* *offset-y*)
+      (set-rgb-stroke 0.6 0.5 0.9)
+      (set-line-width 1)
+      (loop for i in data do
            (incf offset 10)
-           (line-to (+ *offset-x* offset) (+ i *offset-y*))))
-    (stroke)
-    (flexi-streams:with-output-to-sequence (png-stream)
+           (line-to (+ *offset-x* offset) (+ i *offset-y*)))
+      (stroke)
+      (flexi-streams:with-output-to-sequence (png-stream)
       (save-png-stream png-stream)
-      png-stream)))
+      png-stream))))
+  
+(defun image-output-debug (json)
+  (with-html-output-to-string (*standard-output* nil :prologue nil :indent nil)
+    (format t "DECODED JSON: ~A" json)))
 
 (push (create-prefix-dispatcher "/json-form" 'json-form-handler) *dispatch-table*)
 (push (create-prefix-dispatcher "/image" 'json-post-handler) *dispatch-table*)
-(push (create-prefix-dispatcher "/demo/graph.png" 'build-graph) *dispatch-table*)
+
 
