@@ -1,15 +1,8 @@
-(require 'cl-who)
-(require 'hunchentoot)
-(require 'vecto)
-(require 'cl-json)
-
 (defpackage :graph-server
-  (:use :cl :cl-who :hunchentoot :vecto :json :flexi-streams))
+  (:use :cl :cl-who :hunchentoot :vecto :json :flexi-streams :vecto-chart)
+  (:export start-server stop-server))
 
 (in-package :graph-server)
-
-(defvar *offset-x* 10)
-(defvar *offset-y* 10)
 
 (defun json-form-handler ()
     (with-html-output-to-string
@@ -28,19 +21,16 @@
              (:input :type :submit))))))
 
 
-(define-condition json-parse-error (error)
-  ((message :initarg :message)))
+;(define-condition json-parse-error (condition)
+;  ((message :initarg :message :accessor message)))
 
 (defun parse-json (json)
-  (handler-case
-      (progn
-        (json-bind (size data) json
-          (json-bind (x y) size
-            (if (not (and x y data (listp data)))
-                (error 'json-parse-error :message
-                       (format nil "Size: ~A, x: ~A, y: ~A, data: ~A" size x y data))
-                (list :data data :size-x x :size-y y)))))
-    (error () nil)))
+  (json-bind (size data) json
+    (json-bind (x y) size
+      (if (not (and x y data (listp data)))
+          (error 'json-parse-error :message
+                 (format nil "Size: ~A, x: ~A, y: ~A, data: ~A" size x y data))
+          (list :data data :size-x x :size-y y)))))
 
 (defun json-post-handler ()
   (let (decoded-json)
@@ -54,45 +44,27 @@
       (json-parse-error (perror)
         (output-error-json perror)))))
 
-(defun output-error-json (error)
+(defun output-error-json (err)
     (setf (content-type) "text/plain")
     (with-html-output-to-string
         (*standard-output* nil :prologue nil :indent nil)
-      (format t "Error: ~A ~A" error (message error))))
+      (format t "Error: ~A ~A" err (message err))))
 
 (defun image-output-png (json)
   (setf (content-type) "image/png")
   (let ((data (getf json :data))
         (size-x (getf json :size-x))
-        (size-y (getf json :size-y))
-        (offset 10))
-    (with-canvas (:width size-x :height size-y)
-      (set-rgb-fill 0.95 0.95 0.95)
-      (rectangle 0 0 size-x size-y)
-      (fill-path)
-      (set-line-cap :square)
-      (set-line-width 0.35)
-      (move-to 10 10)
-      (line-to 10 (- size-y 10))
-      (move-to 10 10)
-      (line-to (- size-x 10) 10)
-      (stroke)
-      (move-to *offset-x* *offset-y*)
-      (set-rgb-stroke 0.6 0.5 0.9)
-      (set-line-width 1)
-      (loop for i in data do
-           (incf offset 10)
-           (line-to (+ *offset-x* offset) (+ i *offset-y*)))
-      (stroke)
-      (flexi-streams:with-output-to-sequence (png-stream)
-      (save-png-stream png-stream)
-      png-stream))))
+        (size-y (getf json :size-y)))
+    (vecto-chart:render-png-stream size-x size-y data)))
   
 (defun image-output-debug (json)
   (with-html-output-to-string (*standard-output* nil :prologue nil :indent nil)
     (format t "DECODED JSON: ~A" json)))
 
+(defun json-data-handler ()
+  "[[10, 20], [20, 30], [30, 40], [40,20]]")
+
 (push (create-prefix-dispatcher "/json-form" 'json-form-handler) *dispatch-table*)
 (push (create-prefix-dispatcher "/image" 'json-post-handler) *dispatch-table*)
-
+(push (create-prefix-dispatcher "/json-data" 'json-data-handler) *dispatch-table*)
 
