@@ -48,7 +48,7 @@
     (setf (content-type) "text/plain")
     (with-html-output-to-string
         (*standard-output* nil :prologue nil :indent nil)
-      (format t "Error: ~A ~A" err (message err))))
+      (format t "Error: ~A" err)))
 
 (defun image-output-png (json)
   (setf (content-type) "image/png")
