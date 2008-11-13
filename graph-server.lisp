@@ -13,7 +13,12 @@
      (:body
       (:p "Pass the JSON here:")
       (:form :method "post" :action "/image"
-             (:textarea :name "json" :cols 60 :rows 15 (format t "~A" (post-parameter "json")))
+             (:textarea :name "json" :cols 60 :rows 15 (format nil "~A" (post-parameter "json")) "{
+ \"size\": {
+   \"x\": 500,
+   \"y\": 600
+ },
+ \"data\": [10,40,50,60,40,50,60,70,40,30]}")
              (:br)
              (:select :name "output-format"
                       (:option :value "png" "PNG") (:option :value "debug" "DEBUG"))
@@ -55,7 +60,13 @@
   (let ((data (getf json :data))
         (size-x (getf json :size-x))
         (size-y (getf json :size-y)))
-    (vecto-chart:render-png-stream size-x size-y data)))
+    (with-line-chart (:width size-x :height size-y)
+	  (draw-axis)
+	  (add-data data)
+	  (add-data '(10 50 60 40 30 70 60 70 80 60))
+	  (add-data '(120 40 50 70 60 40 40 50 60))
+	  (render-png-stream))))
+
   
 (defun image-output-debug (json)
   (with-html-output-to-string (*standard-output* nil :prologue nil :indent nil)
