@@ -16,7 +16,7 @@
              (:textarea :name "json" :cols 60 :rows 15 (format nil "~A" (post-parameter "json")) "{
  \"size\": {
    \"x\": 500,
-   \"y\": 600
+    \"y\": 600
  },
  \"data\": [10,40,50,60,40,50,60,70,40,30]}")
              (:br)

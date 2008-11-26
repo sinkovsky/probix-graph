@@ -10,7 +10,11 @@
    (data :accessor chart-data :initarg :data :initform nil)))
 
 (defclass line-chart (chart)
-  ())
+  ((have-x-y :accessor chart-have-x-y :initform nil)
+   (min-x :accessor chart-data-min-x :initform 0)
+   (min-y :accessor chart-data-min-y :initform 0)
+   (max-x :accessor chart-data-max-x :initform 0)
+   (max-y :accessor chart-data-max-y :initform 0)))
 
 (defclass pie-chart (chart)
   ())
@@ -66,37 +70,43 @@
   ; add data validation here
   (push data (chart-data chart)))
 
-(defmacro calculate-min-max (&body body)
+(defmacro calculate-min-max* (&body body)
   `(defmethod calculate-min-max ((chart line-chart))
 	 (unless chart-have-x-y
-	   ,(loop for fn in '(min max) do
-			 `(setf (,fn chart)
-				   (apply #',fn (apply #'append (chart-data chart))))
-			 `(setf (,fn chart)
-				   (apply #',fn (apply #'append (chart-data chart))))
-			 `(setf (chart-data-min-x chart) 1)
-			 `(setf (chart-data-max-x chart) (length (car (chart-data chart))))))))
+	   ,(loop for fn in '(min max)
+		   collect
+			 `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
+					(apply #',fn (apply #'append (chart-data chart)))))
+	   (setf (chart-data-min-x chart) 1)
+	   (setf (chart-data-max-x chart) (length (car (chart-data chart)))))
+	 (when chart-have-x-y
+	   ,(loop for fn in '(min max)
+		   collect
+			 `(setf (,(intern (format nil "CHART-DATA-~A-X" fn)) chart)
+					(apply #',fn (apply #'car (apply #'append (chart-data chart)))))
+		   collect
+			 `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
+					 (apply #',fn (apply #'cdr (apply #'append (chart-data chart)))))))))
+(calculate-min-max*)
 
-(calculate-min-max)
+;; (defmethod calculate-min-max ((chart line-chart))
+;;   (unless chart-have-x-y
+;; 	(setf (chart-data-min-y chart)
+;; 		  (apply #'min (apply #'append (chart-data chart))))
+;; 	(setf (chart-data-max-y chart)
+;; 		  (apply #'max (apply #'append (chart-data chart))))
+;; 	(setf (chart-data-min-x chart) 1)
+;; 	(setf (chart-data-max-y chart) (length (car (chart-data chart)))))
 
-(defmethod calculate-min-max ((chart line-chart))
-  (unless chart-have-x-y
-	(setf (chart-data-min-y chart)
-		  (apply #'min (apply #'append (chart-data chart))))
-	(setf (chart-data-max-y chart)
-		  (apply #'max (apply #'append (chart-data chart))))
-	(setf (chart-data-min-x chart) 1)
-	(setf (chart-data-max-y chart) (length (car (chart-data chart)))))
-
-  (when chart-have-x-y
-	(setf (chart-data-min-x chart)
-		  (apply #'min (apply #'car (apply #'append (chart-data chart)))))
-	(setf (chart-data-min-y chart)
-		  (apply #'min (apply #'cdr (apply #'append (chart-data chart)))))
-	(setf (chart-data-max-x chart)
-		  (apply #'max (apply #'car (apply #'append (chart-data chart)))))
-	(setf (chart-data-max-y chart)
-		  (apply #'max (apply #'cdr (apply #'append (chart-data chart)))))))
+;;   (when chart-have-x-y
+;; 	(setf (chart-data-min-x chart)
+;; 		  (apply #'min (apply #'car (apply #'append (chart-data chart)))))
+;; 	(setf (chart-data-min-y chart)
+;; 		  (apply #'min (apply #'cdr (apply #'append (chart-data chart)))))
+;; 	(setf (chart-data-max-x chart)
+;; 		  (apply #'max (apply #'car (apply #'append (chart-data chart)))))
+;; 	(setf (chart-data-max-y chart)
+;;		  (apply #'max (apply #'cdr (apply #'append (chart-data chart)))))))
 
 (defun render-png-stream ()
   (render-png-stream* *current-chart*))
