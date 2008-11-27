@@ -72,25 +72,29 @@
 
 (defmacro calculate-min-max* (&body body)
   `(defmethod calculate-min-max ((chart line-chart))
-	 (unless chart-have-x-y
-	   ,(loop for fn in '(min max)
-		   collect
-			 `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
-					(apply #',fn (apply #'append (chart-data chart)))))
+	 (unless (chart-have-x-y chart)
+	   ,@(loop for fn in '(min max)
+			  collect
+			  `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
+					 (apply #'fn (apply #'append (chart-data chart)))))
 	   (setf (chart-data-min-x chart) 1)
 	   (setf (chart-data-max-x chart) (length (car (chart-data chart)))))
-	 (when chart-have-x-y
-	   ,(loop for fn in '(min max)
-		   collect
+	 (when (chart-have-x-y chart)
+	   ,@(loop for fn in '(min max)
+		   collect 
 			 `(setf (,(intern (format nil "CHART-DATA-~A-X" fn)) chart)
-					(apply #',fn (apply #'car (apply #'append (chart-data chart)))))
+					(apply #',fn
+						   (apply #'car (apply #'append (chart-data chart)))))
 		   collect
 			 `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
-					 (apply #',fn (apply #'cdr (apply #'append (chart-data chart)))))))))
-(calculate-min-max*)
+					 (apply #',fn
+							(apply #'cdr
+								   (apply #'append (chart-data chart))))))))))
 
-;; (defmethod calculate-min-max ((chart line-chart))
-;;   (unless chart-have-x-y
+
+(calculate-min-max*)
+;;(defmethod calculate-min-max ((chart line-chart))
+;;  (unless chart-have-x-y
 ;; 	(setf (chart-data-min-y chart)
 ;; 		  (apply #'min (apply #'append (chart-data chart))))
 ;; 	(setf (chart-data-max-y chart)
@@ -119,8 +123,7 @@
 		 (setf (chart-have-x-y chart) nil)))
 
 ; detect max and min values in data
-  
-  
+
   (loop for dataset in (chart-data chart) do
 	   (move-to *offset-x* *offset-y*)
 	   (apply #'set-rgb-stroke (nth (random (length +series-colors+)) +series-colors+))
