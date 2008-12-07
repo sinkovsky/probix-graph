@@ -1,0 +1,4 @@
+* Fix starting point for chart, now it is (0,0
+* Fix scaling issues
+* Add labels to axis
+* Add option to add point coordinates
