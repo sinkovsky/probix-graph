@@ -14,7 +14,9 @@
    (min-x :accessor chart-data-min-x :initform 0)
    (min-y :accessor chart-data-min-y :initform 0)
    (max-x :accessor chart-data-max-x :initform 0)
-   (max-y :accessor chart-data-max-y :initform 0)))
+   (max-y :accessor chart-data-max-y :initform 0)
+   (ratio-x :accessor chart-ratio-x :initform 1)
+   (ratio-y :accessor chart-ratio-y :initform 1)))
 
 (defclass pie-chart (chart)
   ())
@@ -65,9 +67,29 @@
 
 (defun add-data (data)
   (add-data* *current-chart* data))
-  
+
+
+(define-condition wrong-argument-structure (condition)
+  ())
+
 (defmethod add-data* ((chart chart) data)
   ; add data validation here
+
+  ; 1) checking if data is empty
+  (if (eq data nil)
+	  (cond ((every #'numberp data)
+			 (setf (chart-have-x-y chart) nil))
+			((every #'consp data)
+			 (setf (chart-have-x-y chart) T))))
+
+	  ; 2) checking what we have list of numbers or list of conses
+	  ; and checking if this is consistent with data that we have
+  (if (or 
+	   (and (every #'numberp data) (chart-have-x-y chart))
+	   (and (every #'consp data) (not (chart-have-x-y chart)))
+	   (not (or (not (every #'numberp data)) (not (every #'consp data)))))
+	  (error 'wrong-argument-structure))
+  
   (push data (chart-data chart)))
 
 (defmacro calculate-min-max* (&body body)
@@ -76,9 +98,11 @@
 	   ,@(loop for fn in '(min max)
 			  collect
 			  `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
-					 (apply #'fn (apply #'append (chart-data chart)))))
+					 (apply #',fn (apply #'append (chart-data chart)))))
 	   (setf (chart-data-min-x chart) 1)
-	   (setf (chart-data-max-x chart) (length (car (chart-data chart)))))
+	   (setf (chart-data-max-x chart)
+			 (apply #'max
+					(mapcar #'length (chart-data chart)))))
 	 (when (chart-have-x-y chart)
 	   ,@(loop for fn in '(min max)
 		   collect 
@@ -89,50 +113,58 @@
 			 `(setf (,(intern (format nil "CHART-DATA-~A-Y" fn)) chart)
 					 (apply #',fn
 							(apply #'cdr
-								   (apply #'append (chart-data chart))))))))))
-
+								   (apply #'append (chart-data chart)))))))))
 
 (calculate-min-max*)
-;;(defmethod calculate-min-max ((chart line-chart))
-;;  (unless chart-have-x-y
-;; 	(setf (chart-data-min-y chart)
-;; 		  (apply #'min (apply #'append (chart-data chart))))
-;; 	(setf (chart-data-max-y chart)
-;; 		  (apply #'max (apply #'append (chart-data chart))))
-;; 	(setf (chart-data-min-x chart) 1)
-;; 	(setf (chart-data-max-y chart) (length (car (chart-data chart)))))
-
-;;   (when chart-have-x-y
-;; 	(setf (chart-data-min-x chart)
-;; 		  (apply #'min (apply #'car (apply #'append (chart-data chart)))))
-;; 	(setf (chart-data-min-y chart)
-;; 		  (apply #'min (apply #'cdr (apply #'append (chart-data chart)))))
-;; 	(setf (chart-data-max-x chart)
-;; 		  (apply #'max (apply #'car (apply #'append (chart-data chart)))))
-;; 	(setf (chart-data-max-y chart)
-;;		  (apply #'max (apply #'cdr (apply #'append (chart-data chart)))))))
 
 (defun render-png-stream ()
   (render-png-stream* *current-chart*))
 
+(defmethod calculate-ratios ((chart line-chart))
+  (setf (chart-ratio-x chart)
+		(/ (- (chart-width chart)
+			  (* 10 *offset-x*))
+		   (- (chart-data-max-x chart)
+			  (chart-data-min-x chart))))
+  (setf (chart-ratio-y chart)
+		(/ (- (chart-height chart)
+			  (* 10 *offset-y*))
+		   (- (chart-data-max-y chart)
+			  (chart-data-min-y chart)))))
+
+(defmethod dx->x ((chart line-chart) x)
+  (* (chart-ratio-x chart)
+	 x))
+
+(defmethod dy->y ((chart line-chart) y)
+  (* (chart-ratio-y chart)
+	 y))
+
 (defmethod render-png-stream* ((chart line-chart))
-; detecting if we have consistent data
-  (cond ((every #'consp (chart-data chart))
-		 (setf (chart-have-x-y chart) 1))
-		((every #'numberp (chart-data chart))
-		 (setf (chart-have-x-y chart) nil)))
+  ; calculating min-max-values for all data
+  (calculate-min-max chart)
+  ; calculate ratios for given chart
+  (calculate-ratios chart)
 
-; detect max and min values in data
-
+  ; iterating through data and drawing line
   (loop for dataset in (chart-data chart) do
 	   (move-to *offset-x* *offset-y*)
-	   (apply #'set-rgb-stroke (nth (random (length +series-colors+)) +series-colors+))
+	   (apply #'set-rgb-stroke
+			  (nth (random (length +series-colors+)) +series-colors+))
 	   (set-line-width 1)
-	   (let ((offset 10))
-		 (loop for i in dataset do
-			  (incf offset 10)
-			  (line-to (+ *offset-x* offset) (+ i *offset-y*))))
+	   (let ((offset 1))
+		 (if (chart-have-x-y chart)
+			 (loop for i in dataset do
+					(line-to
+					 (+ (dx->x chart (car i) *offset-x*))
+					 (+ (dy->y chart (cdr i) *offset-y*))))
+			 (loop for i in dataset do
+				  (line-to
+				   (+ *offset-x* (dx->x chart offset))
+				   (+ (dy->y chart i) *offset-y*))
+				  (incf offset 1))))
 	   (stroke))
   (flexi-streams:with-output-to-sequence (png-stream)
 	(save-png-stream png-stream)
 	png-stream))
+
