@@ -25,10 +25,6 @@
              (:br)
              (:input :type :submit))))))
 
-
-;(define-condition json-parse-error (condition)
-;  ((message :initarg :message :accessor message)))
-
 (defun parse-json (json)
   (json-bind (size data) json
     (json-bind (x y) size

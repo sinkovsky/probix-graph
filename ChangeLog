@@ -1,5 +1,11 @@
 2008-12-07 Sergey Sinkovskiy <glorybox.away@gmail.com>
 
+	* graph-server.lisp: removed commented out condition
+	* vecto-chart.lisp: fixed scaling,
+	fixed start point
+
+2008-12-07 Sergey Sinkovskiy <glorybox.away@gmail.com>
+
 	* added scaling
 	* minor fixes
 
